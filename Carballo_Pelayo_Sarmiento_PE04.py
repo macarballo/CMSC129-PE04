@@ -480,112 +480,86 @@ class CompilerUI(tk.Tk):
 
         return result
 
-    # Placeholder function for semantic analysis
     def semantic_analysis(self) -> bool:
         if not self.token_saved:
             messagebox.showwarning("Warning", "Please save the tokenized output first.")
             return False
 
-        self.console_area.config(state="normal")  # Ensure we can insert text
+        self.console_area.config(state="normal")
         self.console_area.insert(tk.END, "----------------------------------------------\n")
         self.console_area.insert(tk.END, "Loading tokens for Static Semantic Analysis...\n")
-        self.console_area.config(state="disabled")  # Disable editing after inserting text
+        self.console_area.config(state="disabled")
 
+        # Load tokens and add debug statement
         self.load_tokens()
+        print("Tokens loaded successfully.")
+        print("Token Stream:", self.token_stream)
 
-        self.console_area.config(state="normal")  # Re-enable insertion for next step
+        self.console_area.config(state="normal")
         self.console_area.insert(tk.END, "Performing Semantic Analysis...\n")
 
         # Initialize semantic errors list
         semantic_errors = []
 
-        # Process each token in the token stream for semantic analysis
-        stack = []  # To hold current context (declaration or assignment)
+        # Start processing each token in the token stream
+        stack = []
+        current_var = None
+
+        print("Starting semantic analysis loop...")  # Debug line
 
         for line_num, lexeme, token in self.token_stream:
-            if token == "INT":  # Integer variable declaration
+            # Handling declarations
+            if token in {"INT", "STR"}:
                 stack.append(("DECLARATION", token))
-                self.variables[lexeme] = {"type": token, "value": "0"}  # Initialize integer variable with default 0
+                current_var = lexeme
 
-            elif token == "STR":  # String variable declaration
-                stack.append(("DECLARATION", token))
-                self.variables[lexeme] = {"type": token, "value": ""}  # Initialize string variable with empty string
-
-            elif token == "IDENT":  # Variable usage
+            elif token == "IDENT":  # Handling identifier usage
                 var_name = lexeme
                 if var_name not in self.variables:
                     semantic_errors.append(f"Line {line_num}: Undeclared variable '{var_name}' used.")
+                elif stack and stack[-1][0] == "DECLARATION":
+                    stack.pop()
                 else:
-                    # Ensure correct context of variable usage
-                    if stack and stack[-1][0] == "DECLARATION":
-                        stack.pop()  # Pop the declaration context after a variable is used
+                    current_var = var_name  # Store current variable for assignment or input
 
-            elif token == "ASSIGN":  # Assignment operation
-                if not stack:
-                    semantic_errors.append(f"Line {line_num}: Invalid assignment outside declaration context.")
-                stack.append(("ASSIGNMENT", lexeme))  # Track assignment for further checks
+            elif token == "INTO":
+                if current_var:
+                    stack.append(("ASSIGNMENT", current_var))
+                else:
+                    semantic_errors.append(f"Line {line_num}: Missing variable in assignment.")
 
-            elif token in ["ADD", "SUB", "MULT", "DIV", "MOD"]:  # Arithmetic operations
-                # Look for the operands involved in the operation
-                operand1 = lexeme
-                operand2 = self.token_stream[line_num + 1][1]  # Assuming the next token is the second operand
-
-                # Check types of the operands
-                if operand1 in self.variables and operand2 in self.variables:
-                    type1 = self.variables[operand1]["type"]
-                    type2 = self.variables[operand2]["type"]
-
-                    # Check if types are compatible for arithmetic operations (only INT allowed)
-                    if type1 != "INT" or type2 != "INT":
-                        semantic_errors.append(
-                            f"Line {line_num}: Type mismatch: Cannot apply {token} to {operand1} ({type1}) and {operand2} ({type2})."
-                        )
-                    elif type1 != type2:
-                        semantic_errors.append(
-                            f"Line {line_num}: Type mismatch: Cannot apply {token} to operands of different types: {operand1} ({type1}) and {operand2} ({type2})."
-                        )
-
-            elif token == "STR_INPUT":  # User input for string type (STR)
+            elif token == "IS":  # Handles the 'IS' keyword for assignment
                 if stack and stack[-1][0] == "ASSIGNMENT":
-                    var_name = stack.pop()[1]  # Pop the assignment, get the variable name
-                    var_type = self.variables.get(var_name, {}).get("type", None)
-                    if var_type and var_type != "STR":
+                    var_name = stack.pop()[1]  # Get variable to assign
+                    if var_name not in self.variables:
+                        semantic_errors.append(f"Line {line_num}: Undeclared variable '{var_name}' in assignment.")
+
+            elif token in {"ADD", "SUB", "MULT", "DIV", "MOD"}:  # Arithmetic operations
+                # Look at operands and ensure they are integers
+                if current_var in self.variables:
+                    type1 = self.variables[current_var]["type"]
+                    if type1 != "INT":
                         semantic_errors.append(
-                            f"Line {line_num}: Type mismatch: Cannot assign STR_INPUT to variable '{var_name}' of type '{var_type}'."
+                            f"Line {line_num}: Type mismatch: {token} operation requires INT, found {type1}."
                         )
 
-            elif token == "INT_LIT":  # Integer literal assignment
+            elif token == "INT_LIT":
                 if stack and stack[-1][0] == "ASSIGNMENT":
-                    var_name = stack.pop()[1]  # Pop the assignment, get the variable name
-                    var_type = self.variables.get(var_name, {}).get("type", None)
-                    if var_type and var_type != "INT":
+                    var_name = stack.pop()[1]  # Get variable to assign
+                    if self.variables[var_name]["type"] != "INT":
                         semantic_errors.append(
-                            f"Line {line_num}: Type mismatch: Cannot assign INT_LIT to variable '{var_name}' of type '{var_type}'."
+                            f"Line {line_num}: Type mismatch: Cannot assign INT_LIT to '{var_name}' of type '{self.variables[var_name]['type']}'."
                         )
 
             elif token == "BEG":  # Input operation
-                var_name = lexeme
-                if var_name not in self.variables:
-                    semantic_errors.append(f"Line {line_num}: Undeclared variable '{var_name}' used in input operation.")
-                else:
-                    var_type = self.variables.get(var_name, {}).get("type", None)
-                    if var_type == "STR":
-                        # Accept user input for string variables
-                        continue
-                    elif var_type == "INT":
-                        # Accept user input for integer variables
-                        continue
-                    else:
-                        semantic_errors.append(f"Line {line_num}: Invalid input type for variable '{var_name}'.")
+                if current_var not in self.variables:
+                    semantic_errors.append(f"Line {line_num}: Undeclared variable '{current_var}' used in input operation.")
+                elif self.variables[current_var]["type"] not in {"INT", "STR"}:
+                    semantic_errors.append(f"Line {line_num}: Invalid input type for '{current_var}'.")
 
             elif token == "PRINT":  # Output operation
-                expr = lexeme
-                if expr not in self.variables and not expr.isdigit():
-                    semantic_errors.append(f"Line {line_num}: Invalid expression in PRINT operation. Must be a variable or literal.")
-                elif expr in self.variables:
-                    var_type = self.variables.get(expr, {}).get("type", None)
-                    if var_type == "STR" or var_type == "INT":
-                        continue
+                if lexeme not in self.variables and not lexeme.isdigit():
+                    semantic_errors.append(f"Line {line_num}: Invalid expression in PRINT operation.")
 
         # Display results of semantic analysis
         if semantic_errors:
@@ -642,7 +616,6 @@ class CompilerUI(tk.Tk):
             value = details.get("value", "Unassigned")
             row = f"{variable:<{var_col_width}} {var_type:<{type_col_width}} {value:<{value_col_width}}\n"
             self.output_area.insert(tk.END, row)
-
 
 # Run the application
 if __name__ == "__main__":
