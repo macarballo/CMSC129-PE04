@@ -583,7 +583,7 @@ class CompilerUI(tk.Tk):
 
         print("Starting semantic analysis loop...")  # Debug line
 
-        for line_num, lexeme, token in self.token_stream:
+        for i, (line_num, lexeme, token) in enumerate(self.token_stream):
             # Handling declarations
             if token in {"INT", "STR"}:
                 stack.append(("DECLARATION", token))
@@ -619,6 +619,8 @@ class CompilerUI(tk.Tk):
                         semantic_errors.append(
                             f"Line {line_num}: Type mismatch: {token} operation requires INT, found {type1}."
                         )
+                else:
+                    semantic_errors.append(f"Line {line_num}: Invalid operation, variable '{current_var}' not found.")
 
             elif token == "INT_LIT":
                 if stack and stack[-1][0] == "ASSIGNMENT":
@@ -627,13 +629,15 @@ class CompilerUI(tk.Tk):
                         semantic_errors.append(
                             f"Line {line_num}: Type mismatch: Cannot assign INT_LIT to '{var_name}' of type '{self.variables[var_name]['type']}'."
                         )
+                    else:
+                        self.variables[var_name]["value"] = int(lexeme)
+                elif current_var in self.variables and self.variables[current_var]["type"] == "INT":
+                    self.variables[current_var]["value"] = int(lexeme)
+                else:
+                    semantic_errors.append(f"Line {line_num}: Type mismatch or missing assignment context for '{current_var}'.")
 
             elif token == "BEG":  # Input operation after BEG keyword
-                # Only process input when the token is a valid variable
-                if lexeme not in self.variables:
-                    semantic_errors.append(f"Line {line_num}: Undeclared variable '{lexeme}' used in input operation.")
-                else:
-                    # Prompt for input based on variable type using terminal
+                if lexeme in self.variables:
                     var_name = lexeme
                     var_type = self.variables[var_name]["type"]
 
@@ -651,10 +655,34 @@ class CompilerUI(tk.Tk):
 
                     except ValueError:
                         semantic_errors.append(f"Line {line_num}: Invalid input type for '{var_name}' (expected {var_type}).")
+                else:
+                    semantic_errors.append(f"Line {line_num}: Undeclared variable '{lexeme}' used in input operation.")
 
             elif token == "PRINT":  # Output operation
-                if lexeme not in self.variables and not lexeme.isdigit():
-                    semantic_errors.append(f"Line {line_num}: Invalid expression in PRINT operation.")
+                # Ensure the next token is the expression to be printed
+                if i + 1 < len(self.token_stream):
+                    next_token = self.token_stream[i + 1]
+                    next_lexeme = next_token[1]
+                    if next_lexeme in self.variables:
+                        print(f"DEBUG: PRINT operation for variable '{next_lexeme}': {self.variables[next_lexeme]['value']}")
+                        self.console_area.insert(tk.END, f"{self.variables[next_lexeme]['value']}\n")
+                    elif next_lexeme.isdigit():
+                        print(f"DEBUG: PRINT operation for digit '{next_lexeme}'")
+                        self.console_area.insert(tk.END, f"{next_lexeme}\n")
+                    else:
+                        print(f"DEBUG: Invalid expression in PRINT operation for lexeme: {next_lexeme}")
+                        semantic_errors.append(f"Line {line_num}: Invalid expression in PRINT operation.")
+                else:
+                    semantic_errors.append(f"Line {line_num}: Missing expression after PRINT command.")
+
+            elif token == "NEWLN":  # Handle new line
+                self.console_area.insert(tk.END, "\n")
+            
+            elif token in {"IOL", "LOI"}:  # Handle special tokens
+                continue  # Just ignore these tokens for now
+
+            else:
+                print(f"DEBUG: Unhandled token: {token} with lexeme: {lexeme}")
 
         # Display results of semantic analysis
         if semantic_errors:
