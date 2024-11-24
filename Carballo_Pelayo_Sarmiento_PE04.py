@@ -1,6 +1,7 @@
 import csv
 import tkinter as tk
 from tkinter import filedialog, scrolledtext, messagebox
+from typing import Tuple
 
 # Main application class
 class CompilerUI(tk.Tk):
@@ -273,14 +274,9 @@ class CompilerUI(tk.Tk):
         # Trigger Syntax and Semantic Analysis after saving the tokens
         syntax_analysis_success = self.syntax_analysis()
         if not syntax_analysis_success:
-            error_msg = "Parse Errors\n"
-            self.console_area.insert(tk.END, error_msg)
             return
 
-        semantic_analysis_success = self.semantic_analysis()
-        if not semantic_analysis_success:
-            error_msg = "Semantic Errors\n"
-            self.console_area.insert(tk.END, error_msg)
+        self.semantic_analysis()
 
     # Perform lexical analysis to generate tokens and identify errors
     def lexical_analysis(self, code):
@@ -338,7 +334,7 @@ class CompilerUI(tk.Tk):
 
         return tokens
 
-    def parse_tokens_with_grammar(self, productions: list, parse_table: dict) -> bool:
+    def parse_tokens_with_grammar(self, productions: list, parse_table: dict) -> Tuple[bool, str]:
         """
         Parses tokens from the input field using a specified grammar.
 
@@ -350,9 +346,11 @@ class CompilerUI(tk.Tk):
             bool: True if the input is valid based on the grammar; False otherwise.
         """
         input_tokens = [token for _, __, token in self.token_stream]
+        error_msg = None
         if not input_tokens:
-            print("Error: No input tokens provided!")
-            return False
+            error_msg = "Error: No input tokens provided!"
+            print(error_msg)
+            return False, error_msg
 
         starting_production_rule = productions[0][
             1
@@ -378,9 +376,8 @@ class CompilerUI(tk.Tk):
                 if current_input in parse_table[stack_top]:
                     production_number = parse_table[stack_top][current_input]
                     if production_number == "":
-                        print(
-                            f"Error: No rule found for {stack_top} with input {current_input}"
-                        )
+                        error_msg = f"Error: No rule found for {stack_top} with input {current_input}"
+                        print(error_msg)
                         is_valid = False
                         break
                     else:
@@ -391,15 +388,15 @@ class CompilerUI(tk.Tk):
                         action = f"Output {production[1]} -> {production[2]}"
                         print(action)
                 else:
-                    print(
-                        f"Error: No matching terminal for {stack_top} with input {current_input}"
-                    )
+                    error_msg = f"Error: No matching terminal for {stack_top} with input {current_input}"
+                    print(error_msg)
                     is_valid = False
                     break
 
             # Handle unexpected tokens
             else:
-                print(f"Error: Unexpected token {stack_top}")
+                error_msg = f"Error: Unexpected token {stack_top}"
+                print(error_msg)
                 is_valid = False
                 break
 
@@ -407,10 +404,11 @@ class CompilerUI(tk.Tk):
 
         # Ensure input buffer is exhausted
         if input_buffer != ["$"]:
-            print("Error: Input buffer not exhausted.")
-            return False
+            error_msg = "Error: Input buffer not exhausted."
+            print(error_msg)
+            return False, error_msg
 
-        return is_valid
+        return is_valid, error_msg
 
     def load_productions(self, file_path):
         """
@@ -467,11 +465,17 @@ class CompilerUI(tk.Tk):
         self.console_area.config(state="normal")  # Re-enable insertion for next step
         self.console_area.insert(tk.END, "Performing Syntax Analysis...\n")
 
-        result = self.parse_tokens_with_grammar(
+        result, error_msg = self.parse_tokens_with_grammar(
             parse_table=parse_table_values, productions=productions_values
         )
 
-        self.console_area.insert(tk.END, "Syntax Analysis completed.\n")
+        # Display syntax analysis errors
+        if not result:
+            self.console_area.insert(tk.END, "Syntax Analysis unsuccessful.\n\nSyntax Errors:\n" + error_msg)
+        else:
+            self.console_area.insert(tk.END, "Syntax Analysis successful! No syntax errors found.\n")
+
+        self.console_area.insert(tk.END, "\nSyntax Analysis completed.\n")
         self.console_area.config(state="disabled")  # Disable editing after completion
 
         return result
