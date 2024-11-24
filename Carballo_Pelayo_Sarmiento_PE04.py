@@ -164,6 +164,7 @@ class CompilerUI(tk.Tk):
 
         self.productions_values = None
         self.parse_table_values = None
+        self.token_stream_for_syntax_analysis = None
 
     # Clear editor, output, and console when creating a new file
     def new_file(self):
@@ -324,7 +325,9 @@ class CompilerUI(tk.Tk):
                     self.error_list.append(f"Unknown lexeme '{word}' on line {line_num}")
 
             # Add a NEWLN token at the end of each line
-            tokens.append((line_num, "\\n", "NEWLN"))
+            last_word = words[-1]
+            if not last_word.endswith("LOI"):
+                tokens.append((line_num, "\\n", "NEWLN"))
 
         return tokens
 
@@ -335,7 +338,6 @@ class CompilerUI(tk.Tk):
         Args:
             productions (list): List of production rules as (line_number, non_terminal, production).
             parse_table (dict): Dictionary representing the parse table.
-            token_stream (list): List of tokens to parse.
 
         Returns:
             bool: True if the input is valid based on the grammar; False otherwise.
@@ -356,9 +358,6 @@ class CompilerUI(tk.Tk):
         while stack:
             stack_top = stack[-1]
             current_input = input_buffer[0]
-
-            print(f"Stack: {stack}")
-            print(f"Input Buffer: {input_buffer}")
 
             # Match terminal symbols
             if stack_top == current_input:
@@ -437,13 +436,8 @@ class CompilerUI(tk.Tk):
         with open(file_path, newline="", encoding="utf-8") as file:
             reader = csv.reader(file)
             headers = next(reader)[1:]
-            print(len(headers))
             for row in reader:
-                print(row)
                 non_terminal = row[0]
-                for i in range(len(headers)):
-                    print(headers[i], row[i + 1])
-
                 parse_table[non_terminal] = {
                     headers[i]: row[i + 1] for i in range(len(headers))
                 }
@@ -453,7 +447,7 @@ class CompilerUI(tk.Tk):
     def syntax_analysis(self):
         if not self.token_saved:
             messagebox.showwarning("Warning", "Please save the tokenized output first.")
-            return
+            return False
 
         self.console_area.insert(tk.END, "Loading tokens for Syntax Analysis...\n")
 
@@ -465,7 +459,6 @@ class CompilerUI(tk.Tk):
         result = self.parse_tokens_with_grammar(
             parse_table=parse_table_values, productions=productions_values
         )
-
         self.console_area.insert(tk.END, "Syntax Analysis completed.\n\n")
         return result
 
