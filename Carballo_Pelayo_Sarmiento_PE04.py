@@ -198,20 +198,24 @@ class CompilerUI(tk.Tk):
 
         self.console_area.delete(1.0, tk.END)
         token_content = ""
-        current_line = 1
-        for lexeme, token in self.token_stream:
+        for line_num, lexeme, token in self.token_stream:
+            # Skip newline tokens for readability
             if token == "NEWLN":
-                current_line += 1
-            token_content += f"Line {current_line}: {lexeme} -> {token}\n"
+                continue
+            token_content += f"Line {line_num}: {lexeme} -> {token}\n"
+
         self.console_area.insert(tk.END, token_content)
-    
+
     # Save the tokenized output to a file
     def save_token_file(self):
         if not self.token_stream:
             messagebox.showwarning("Warning", "No tokenized output available. Compile the code first.")
             return
 
-        token_content = "\n".join(f"{lexeme} -> {token}" for lexeme, token in self.token_stream)
+        # Save tokens with line numbers
+        token_content = "\n".join(
+            f"{line_num} -> {lexeme} -> {token}" for line_num, lexeme, token in self.token_stream if token != "NEWLN"
+        )
         with open(self.token_file_path, "w") as file:
             file.write(token_content)
         messagebox.showinfo("Info", f"Tokenized output saved as {self.token_file_path}.")
@@ -236,22 +240,25 @@ class CompilerUI(tk.Tk):
 
             for i, word in enumerate(words):
                 if word in keywords or word in types:
-                    tokens.append((word, word))
+                    tokens.append((line_num, word, word))
                     if word in types and i + 1 < len(words):
                         var_name = words[i + 1]
                         if var_name.isidentifier():
                             default_value = 0 if word == "INT" else "Unassigned"
                             self.variables[var_name] = {"type": word, "value": default_value}
-                            tokens.append((var_name, "IDENT"))
+                            tokens.append((line_num, var_name, "IDENT"))
                         else:
                             self.error_list.append(f"Invalid identifier '{var_name}' on line {line_num}")
                 elif word.isdigit():
-                    tokens.append((word, "INT_LIT"))
+                    tokens.append((line_num, word, "INT_LIT"))
                 elif word.isidentifier():
-                    tokens.append((word, "IDENT"))
+                    tokens.append((line_num, word, "IDENT"))
                 else:
-                    tokens.append((word, "ERR_LEX"))
+                    tokens.append((line_num, word, "ERR_LEX"))
                     self.error_list.append(f"Unknown lexeme '{word}' on line {line_num}")
+
+            # Add a NEWLN token at the end of each line
+            tokens.append((line_num, "\\n", "NEWLN"))
 
         return tokens
 
@@ -273,11 +280,53 @@ class CompilerUI(tk.Tk):
             messagebox.showwarning("Warning", "Please save the tokenized output first.")
             return
 
+        self.console_area.insert(tk.END, "----------------------------------------------\n")
         self.console_area.insert(tk.END, "Loading tokens for Static Semantic Analysis...\n")
         self.load_tokens()
         self.console_area.insert(tk.END, "Performing Static Semantic Analysis...\n")
-        # Semantic analysis logic to be added here by groupmate
-        self.console_area.insert(tk.END, "Static Semantic Analysis completed.\n\n")
+
+        # Initialize semantic errors list
+        semantic_errors = []
+
+        # Process each token in the token stream for semantic analysis
+        stack = []  # To hold current context (declaration or assignment)
+
+        for line_num, lexeme, token in self.token_stream:
+            if token in ["INT", "STR"]:  # Variable declaration
+                stack.append(("DECLARATION", token))
+                self.variables[lexeme] = {"type": token, "value": "Unassigned"}  # Initialize variable
+
+            elif token == "IDENT":  # Variable usage
+                var_name = lexeme
+                if var_name not in self.variables:
+                    semantic_errors.append(f"Line {line_num}: Undeclared variable '{var_name}' used.")
+                else:
+                    # Ensure correct context of variable usage
+                    if stack and stack[-1][0] == "DECLARATION":
+                        stack.pop()  # Pop the declaration context after a variable is used
+
+            elif token == "ASSIGN":  # Assignment operation
+                if not stack:
+                    semantic_errors.append(f"Line {line_num}: Invalid assignment outside declaration context.")
+                stack.append(("ASSIGNMENT", lexeme))  # Track assignment for further checks
+
+            elif token in ["INT_LIT", "STR_LIT"]:  # Literal values (integer, string literals)
+                if stack and stack[-1][0] == "ASSIGNMENT":
+                    var_name = stack.pop()[1]  # Pop the assignment, get the variable name
+                    var_type = self.variables.get(var_name, {}).get("type", None)
+                    if (var_type == "INT" and token != "INT_LIT") or (var_type == "STR" and token != "STR_LIT"):
+                        semantic_errors.append(
+                            f"Line {line_num}: Type mismatch: Cannot assign {token} to variable '{var_name}' of type '{var_type}'."
+                        )
+
+        # Display results of semantic analysis
+        if semantic_errors:
+            error_msg = "Static Semantic Analysis unsuccessful.\n\nSemantic Errors:\n" + "\n".join(semantic_errors)
+            self.console_area.insert(tk.END, error_msg)
+        else:
+            self.console_area.insert(tk.END, "Static Semantic Analysis successful! No semantic errors found.\n")
+
+        self.console_area.insert(tk.END, "\nStatic Semantic Analysis completed.\n\n")
 
     # Load tokens from the saved .tkn file for analysis.
     def load_tokens(self):
@@ -285,8 +334,9 @@ class CompilerUI(tk.Tk):
         try:
             with open(self.token_file_path, "r") as file:
                 for line in file:
-                    lexeme, token = line.strip().split(" -> ")
-                    self.token_stream.append((lexeme, token))
+                    # Parse line number, lexeme, and token
+                    line_num, lexeme, token = line.strip().split(" -> ")
+                    self.token_stream.append((int(line_num), lexeme, token))
             self.console_area.insert(tk.END, "Tokens loaded successfully.\n")
         except FileNotFoundError:
             messagebox.showerror("Error", f"Token file '{self.token_file_path}' not found.")
