@@ -490,9 +490,9 @@ class CompilerUI(tk.Tk):
         self.console_area.insert(tk.END, "----------------------------------------------\n")
         self.console_area.insert(tk.END, "Loading tokens for Static Semantic Analysis...\n")
         self.console_area.config(state="disabled")  # Disable editing after inserting text
-        
+
         self.load_tokens()
-        
+
         self.console_area.config(state="normal")  # Re-enable insertion for next step
         self.console_area.insert(tk.END, "Performing Semantic Analysis...\n")
 
@@ -503,9 +503,13 @@ class CompilerUI(tk.Tk):
         stack = []  # To hold current context (declaration or assignment)
 
         for line_num, lexeme, token in self.token_stream:
-            if token in ["INT", "STR"]:  # Variable declaration
+            if token == "INT":  # Integer variable declaration
                 stack.append(("DECLARATION", token))
-                self.variables[lexeme] = {"type": token, "value": "Unassigned"}  # Initialize variable
+                self.variables[lexeme] = {"type": token, "value": "0"}  # Initialize integer variable with default 0
+
+            elif token == "STR":  # String variable declaration
+                stack.append(("DECLARATION", token))
+                self.variables[lexeme] = {"type": token, "value": ""}  # Initialize string variable with empty string
 
             elif token == "IDENT":  # Variable usage
                 var_name = lexeme
@@ -521,14 +525,67 @@ class CompilerUI(tk.Tk):
                     semantic_errors.append(f"Line {line_num}: Invalid assignment outside declaration context.")
                 stack.append(("ASSIGNMENT", lexeme))  # Track assignment for further checks
 
-            elif token in ["INT_LIT", "STR_LIT"]:  # Literal values (integer, string literals)
+            elif token in ["ADD", "SUB", "MULT", "DIV", "MOD"]:  # Arithmetic operations
+                # Look for the operands involved in the operation
+                operand1 = lexeme
+                operand2 = self.token_stream[line_num + 1][1]  # Assuming the next token is the second operand
+
+                # Check types of the operands
+                if operand1 in self.variables and operand2 in self.variables:
+                    type1 = self.variables[operand1]["type"]
+                    type2 = self.variables[operand2]["type"]
+
+                    # Check if types are compatible for arithmetic operations (only INT allowed)
+                    if type1 != "INT" or type2 != "INT":
+                        semantic_errors.append(
+                            f"Line {line_num}: Type mismatch: Cannot apply {token} to {operand1} ({type1}) and {operand2} ({type2})."
+                        )
+                    elif type1 != type2:
+                        semantic_errors.append(
+                            f"Line {line_num}: Type mismatch: Cannot apply {token} to operands of different types: {operand1} ({type1}) and {operand2} ({type2})."
+                        )
+
+            elif token == "STR_INPUT":  # User input for string type (STR)
                 if stack and stack[-1][0] == "ASSIGNMENT":
                     var_name = stack.pop()[1]  # Pop the assignment, get the variable name
                     var_type = self.variables.get(var_name, {}).get("type", None)
-                    if (var_type == "INT" and token != "INT_LIT") or (var_type == "STR" and token != "STR_LIT"):
+                    if var_type and var_type != "STR":
                         semantic_errors.append(
-                            f"Line {line_num}: Type mismatch: Cannot assign {token} to variable '{var_name}' of type '{var_type}'."
+                            f"Line {line_num}: Type mismatch: Cannot assign STR_INPUT to variable '{var_name}' of type '{var_type}'."
                         )
+
+            elif token == "INT_LIT":  # Integer literal assignment
+                if stack and stack[-1][0] == "ASSIGNMENT":
+                    var_name = stack.pop()[1]  # Pop the assignment, get the variable name
+                    var_type = self.variables.get(var_name, {}).get("type", None)
+                    if var_type and var_type != "INT":
+                        semantic_errors.append(
+                            f"Line {line_num}: Type mismatch: Cannot assign INT_LIT to variable '{var_name}' of type '{var_type}'."
+                        )
+
+            elif token == "BEG":  # Input operation
+                var_name = lexeme
+                if var_name not in self.variables:
+                    semantic_errors.append(f"Line {line_num}: Undeclared variable '{var_name}' used in input operation.")
+                else:
+                    var_type = self.variables.get(var_name, {}).get("type", None)
+                    if var_type == "STR":
+                        # Accept user input for string variables
+                        continue
+                    elif var_type == "INT":
+                        # Accept user input for integer variables
+                        continue
+                    else:
+                        semantic_errors.append(f"Line {line_num}: Invalid input type for variable '{var_name}'.")
+
+            elif token == "PRINT":  # Output operation
+                expr = lexeme
+                if expr not in self.variables and not expr.isdigit():
+                    semantic_errors.append(f"Line {line_num}: Invalid expression in PRINT operation. Must be a variable or literal.")
+                elif expr in self.variables:
+                    var_type = self.variables.get(expr, {}).get("type", None)
+                    if var_type == "STR" or var_type == "INT":
+                        continue
 
         # Display results of semantic analysis
         if semantic_errors:
