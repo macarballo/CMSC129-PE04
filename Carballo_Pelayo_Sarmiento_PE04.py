@@ -2,7 +2,6 @@ import csv
 import tkinter as tk
 from tkinter import filedialog, scrolledtext, messagebox
 
-
 # Main application class
 class CompilerUI(tk.Tk):
     def __init__(self):
@@ -215,7 +214,9 @@ class CompilerUI(tk.Tk):
 
         # Perform lexical analysis
         self.token_stream = self.lexical_analysis(code)
+        self.output_area.config(state="normal")  # Allow editing to update content
         self.output_area.delete(1.0, tk.END)  # Clear output area
+        self.console_area.config(state="normal")  # Allow editing to update content
         self.console_area.delete(1.0, tk.END)  # Clear token console
 
         if self.error_list:
@@ -226,6 +227,10 @@ class CompilerUI(tk.Tk):
             )
             self.display_variables_table()
 
+        # Make the areas non-editable again
+        self.output_area.config(state="disabled")
+        self.console_area.config(state="disabled")
+
     # Show tokenized code in the console area
     def show_tokenized_code(self):
         if not self.token_stream:
@@ -234,6 +239,7 @@ class CompilerUI(tk.Tk):
             )
             return
 
+        self.console_area.config(state="normal")  # Allow editing to update content
         self.console_area.delete(1.0, tk.END)
         token_content = ""
         for line_num, lexeme, token in self.token_stream:
@@ -243,6 +249,7 @@ class CompilerUI(tk.Tk):
             token_content += f"Line {line_num}: {lexeme} -> {token}\n"
 
         self.console_area.insert(tk.END, token_content)
+        self.console_area.config(state="disabled")  # Make it non-editable after updating
 
     # Save the tokenized output to a file
     def save_token_file(self):
@@ -449,17 +456,24 @@ class CompilerUI(tk.Tk):
             messagebox.showwarning("Warning", "Please save the tokenized output first.")
             return False
 
+        self.console_area.config(state="normal")  # Ensure we can insert text
+        self.console_area.insert(tk.END, "----------------------------------------------\n")
         self.console_area.insert(tk.END, "Loading tokens for Syntax Analysis...\n")
+        self.console_area.config(state="disabled")  # Disable editing after inserting text
 
         productions_values = self.load_productions(self.production_filename)
         parse_table_values = self.load_parse_table(self.parse_table_filename)
 
+        self.console_area.config(state="normal")  # Re-enable insertion for next step
         self.console_area.insert(tk.END, "Performing Syntax Analysis...\n")
 
         result = self.parse_tokens_with_grammar(
             parse_table=parse_table_values, productions=productions_values
         )
-        self.console_area.insert(tk.END, "Syntax Analysis completed.\n\n")
+
+        self.console_area.insert(tk.END, "Syntax Analysis completed.\n")
+        self.console_area.config(state="disabled")  # Disable editing after completion
+
         return result
 
     # Placeholder function for semantic analysis
@@ -468,10 +482,15 @@ class CompilerUI(tk.Tk):
             messagebox.showwarning("Warning", "Please save the tokenized output first.")
             return False
 
+        self.console_area.config(state="normal")  # Ensure we can insert text
         self.console_area.insert(tk.END, "----------------------------------------------\n")
         self.console_area.insert(tk.END, "Loading tokens for Static Semantic Analysis...\n")
+        self.console_area.config(state="disabled")  # Disable editing after inserting text
+        
         self.load_tokens()
-        self.console_area.insert(tk.END, "Performing Static Semantic Analysis...\n")
+        
+        self.console_area.config(state="normal")  # Re-enable insertion for next step
+        self.console_area.insert(tk.END, "Performing Semantic Analysis...\n")
 
         # Initialize semantic errors list
         semantic_errors = []
