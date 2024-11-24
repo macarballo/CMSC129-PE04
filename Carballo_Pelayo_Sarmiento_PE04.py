@@ -637,38 +637,44 @@ class CompilerUI(tk.Tk):
                     semantic_errors.append(f"Line {line_num}: Type mismatch or missing assignment context for '{current_var}'.")
 
             elif token == "BEG":  # Input operation after BEG keyword
-                if lexeme in self.variables:
-                    var_name = lexeme
-                    var_type = self.variables[var_name]["type"]
-
-                    try:
-                        if var_type == "INT":
-                            # Ensure input happens in terminal
-                            input_value = int(input(f"Enter an integer value for {var_name}: "))
-                        elif var_type == "STR":
-                            # Ensure input happens in terminal
-                            input_value = input(f"Enter a string value for {var_name}: ")
-
-                        # Assign the input value to the variable
-                        self.variables[var_name]["value"] = input_value
-                        print(f"Input received for {var_name}: {input_value}")
-
-                    except ValueError:
-                        semantic_errors.append(f"Line {line_num}: Invalid input type for '{var_name}' (expected {var_type}).")
-                else:
-                    semantic_errors.append(f"Line {line_num}: Undeclared variable '{lexeme}' used in input operation.")
-
-            elif token == "PRINT":  # Output operation
-                # Ensure the next token is the expression to be printed
                 if i + 1 < len(self.token_stream):
                     next_token = self.token_stream[i + 1]
                     next_lexeme = next_token[1]
                     if next_lexeme in self.variables:
-                        print(f"DEBUG: PRINT operation for variable '{next_lexeme}': {self.variables[next_lexeme]['value']}")
-                        self.console_area.insert(tk.END, f"{self.variables[next_lexeme]['value']}\n")
+                        var_name = next_lexeme
+                        var_type = self.variables[var_name]["type"]
+
+                        try:
+                            if var_type == "INT":
+                                input_value = int(input(f"Enter an integer value for {var_name}: "))
+                            elif var_type == "STR":
+                                input_value = input(f"Enter a string value for {var_name}: ")
+
+                            self.variables[var_name]["value"] = input_value
+                            print(f"Input received for {var_name}: {input_value}")
+
+                        except ValueError:
+                            semantic_errors.append(f"Line {line_num}: Invalid input type for '{var_name}' (expected {var_type}).")
+                    else:
+                        semantic_errors.append(f"Line {line_num}: Undeclared variable '{next_lexeme}' used in input operation.")
+                else:
+                    semantic_errors.append(f"Line {line_num}: Missing variable after BEG command.")
+
+            elif token == "PRINT":  # Output operation
+                if i + 1 < len(self.token_stream):
+                    next_token = self.token_stream[i + 1]
+                    next_lexeme = next_token[1]
+                    next_token_type = next_token[2]
+                    if next_lexeme in self.variables:
+                        output_value = self.variables[next_lexeme]['value']
+                        print(f"DEBUG: PRINT operation for variable '{next_lexeme}': {output_value}")
+                        self.console_area.insert(tk.END, f"Line {line_num} Output: {output_value}\n")
                     elif next_lexeme.isdigit():
+                        output_value = next_lexeme
                         print(f"DEBUG: PRINT operation for digit '{next_lexeme}'")
-                        self.console_area.insert(tk.END, f"{next_lexeme}\n")
+                        self.console_area.insert(tk.END, f"Line {line_num} Output: {output_value}\n")
+                    elif next_token_type in {"ADD", "SUB", "MULT", "DIV", "MOD"}:
+                        semantic_errors.append(f"Line {line_num}: Invalid operation '{next_lexeme}' in PRINT statement.")
                     else:
                         print(f"DEBUG: Invalid expression in PRINT operation for lexeme: {next_lexeme}")
                         semantic_errors.append(f"Line {line_num}: Invalid expression in PRINT operation.")
