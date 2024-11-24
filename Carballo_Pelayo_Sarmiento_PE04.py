@@ -2,6 +2,7 @@ import csv
 import tkinter as tk
 from tkinter import filedialog, scrolledtext, messagebox
 from typing import Tuple
+import tkinter.simpledialog as simpledialog
 
 # Main application class
 class CompilerUI(tk.Tk):
@@ -227,10 +228,72 @@ class CompilerUI(tk.Tk):
                 tk.END, "Compilation successful! No lexical errors found.\n\n"
             )
             self.display_variables_table()
+            self.prompt_for_inputs()  # Prompt for inputs only if no lexical errors
 
         # Make the areas non-editable again
         self.output_area.config(state="disabled")
         self.console_area.config(state="disabled")
+
+    def prompt_for_inputs(self):
+        """
+        Sequentially prompts the user for input values for variables
+        that are referenced by the BEG command.
+        """
+        i = 0  # Pointer to iterate through the token stream
+        while i < len(self.token_stream):
+            line_num, lexeme, token = self.token_stream[i]
+
+            if token == "BEG":
+                # Check the next token for the variable name
+                if i + 1 < len(self.token_stream):
+                    next_line_num, next_lexeme, next_token = self.token_stream[i + 1]
+
+                    if next_token == "IDENT" and next_lexeme in self.variables:
+                        var_name = next_lexeme
+                        var_type = self.variables[var_name]["type"]
+
+                        # Prompt user for input based on variable type
+                        try:
+                            if var_type == "INT":
+                                input_value = simpledialog.askinteger(
+                                    "Input Required",
+                                    f"Enter an integer value for {var_name}:",
+                                    parent=self,
+                                )
+                            elif var_type == "STR":
+                                input_value = simpledialog.askstring(
+                                    "Input Required",
+                                    f"Enter a string value for {var_name}:",
+                                    parent=self,
+                                )
+
+                            if input_value is not None:  # User provided input
+                                self.variables[var_name]["value"] = input_value
+                                print(f"Input received for {var_name}: {input_value}")
+                            else:
+                                messagebox.showwarning(
+                                    "Input Cancelled",
+                                    f"No value provided for {var_name}.",
+                                )
+                        except ValueError:
+                            messagebox.showerror(
+                                "Invalid Input",
+                                f"Invalid input for {var_name}. Expected type: {var_type}.",
+                            )
+                        i += 1  # Skip the variable token as it's processed
+                    else:
+                        messagebox.showerror(
+                            "Undeclared Variable",
+                            f"Variable '{next_lexeme}' is not declared. Cannot request input.",
+                        )
+                else:
+                    messagebox.showerror(
+                        "Syntax Error", f"BEG on line {line_num} is missing a variable."
+                    )
+            i += 1  # Move to the next token
+
+        # Update the variable table after all inputs are collected
+        self.display_variables_table()
 
     # Show tokenized code in the console area
     def show_tokenized_code(self):
