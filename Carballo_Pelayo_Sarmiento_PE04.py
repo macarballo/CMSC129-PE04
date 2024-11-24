@@ -512,6 +512,8 @@ class CompilerUI(tk.Tk):
             if token in {"INT", "STR"}:
                 stack.append(("DECLARATION", token))
                 current_var = lexeme
+                # Initialize variable with default values based on type
+                self.variables[current_var] = {"type": token, "value": None}
 
             elif token == "IDENT":  # Handling identifier usage
                 var_name = lexeme
@@ -535,7 +537,6 @@ class CompilerUI(tk.Tk):
                         semantic_errors.append(f"Line {line_num}: Undeclared variable '{var_name}' in assignment.")
 
             elif token in {"ADD", "SUB", "MULT", "DIV", "MOD"}:  # Arithmetic operations
-                # Look at operands and ensure they are integers
                 if current_var in self.variables:
                     type1 = self.variables[current_var]["type"]
                     if type1 != "INT":
@@ -551,11 +552,29 @@ class CompilerUI(tk.Tk):
                             f"Line {line_num}: Type mismatch: Cannot assign INT_LIT to '{var_name}' of type '{self.variables[var_name]['type']}'."
                         )
 
-            elif token == "BEG":  # Input operation
-                if current_var not in self.variables:
-                    semantic_errors.append(f"Line {line_num}: Undeclared variable '{current_var}' used in input operation.")
-                elif self.variables[current_var]["type"] not in {"INT", "STR"}:
-                    semantic_errors.append(f"Line {line_num}: Invalid input type for '{current_var}'.")
+            elif token == "BEG":  # Input operation after BEG keyword
+                # Only process input when the token is a valid variable
+                if lexeme not in self.variables:
+                    semantic_errors.append(f"Line {line_num}: Undeclared variable '{lexeme}' used in input operation.")
+                else:
+                    # Prompt for input based on variable type using terminal
+                    var_name = lexeme
+                    var_type = self.variables[var_name]["type"]
+
+                    try:
+                        if var_type == "INT":
+                            # Ensure input happens in terminal
+                            input_value = int(input(f"Enter an integer value for {var_name}: "))
+                        elif var_type == "STR":
+                            # Ensure input happens in terminal
+                            input_value = input(f"Enter a string value for {var_name}: ")
+
+                        # Assign the input value to the variable
+                        self.variables[var_name]["value"] = input_value
+                        print(f"Input received for {var_name}: {input_value}")
+
+                    except ValueError:
+                        semantic_errors.append(f"Line {line_num}: Invalid input type for '{var_name}' (expected {var_type}).")
 
             elif token == "PRINT":  # Output operation
                 if lexeme not in self.variables and not lexeme.isdigit():
