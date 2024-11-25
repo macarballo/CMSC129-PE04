@@ -1,0 +1,25 @@
+1,Program,IOL Statements LOI
+2,Statements,Statement Statements'
+3,Statements',Statements
+4,Statements',e
+5,Statement,DataDeclaration
+6,Statement,Assignment
+7,Statement,InputOperation
+8,Statement,OutputOperation
+9,Statement,NewlineOperation
+10,DataDeclaration,INT IDENT DataDeclaration'
+11,DataDeclaration,STR IDENT
+12,DataDeclaration',IS INT_LIT
+13,DataDeclaration',e
+14,Assignment,INTO IDENT IS Expression
+15,InputOperation,BEG IDENT
+16,OutputOperation,PRINT Expression
+17,NewlineOperation,NEWLN
+18,Expression,Operation Expression Expression
+19,Expression,IDENT
+20,Expression,INT_LIT
+21,Operation,ADD
+22,Operation,SUB
+23,Operation,MULT
+24,Operation,DIV
+25,Operation,MOD
