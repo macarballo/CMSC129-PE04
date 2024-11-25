@@ -577,33 +577,18 @@ class CompilerUI(tk.Tk):
         # Initialize semantic errors list
         semantic_errors = []
 
-        # Store input values in a dictionary
-        input_values = {}
-
         # Start processing each token in the token stream
         stack = []
         current_var = None
 
         print("Starting semantic analysis loop...")  # Debug line
 
-        def get_input_value(var_name, var_type):
-            # Check if input has already been provided for the variable
-            if var_name in input_values:
-                return input_values[var_name]  # Return previously stored value
+        def get_input_value(var_name):
+            # Get input value from the variables dictionary after prompt_for_inputs method is called
+            return self.variables.get(var_name, {}).get("value", "undefined")
 
-            # Prompt for input only if it's not already provided
-            input_value = None
-            if var_type == "INT":
-                input_value = simpledialog.askinteger("Input Required", f"Enter an integer value for {var_name}:")
-                if input_value is None:  # If user cancels or closes the dialog
-                    raise ValueError(f"No input provided for {var_name}. Semantic Analysis aborted.")
-            elif var_type == "STR":
-                input_value = simpledialog.askstring("Input Required", f"Enter a string value for {var_name}:")
-                if input_value is None:  # If user cancels or closes the dialog
-                    raise ValueError(f"No input provided for {var_name}. Semantic Analysis aborted.")
-
-            input_values[var_name] = input_value  # Store the input value in the dictionary
-            return input_value
+        # Call the method to prompt for inputs
+        # self.prompt_for_inputs()
 
         for i, (line_num, lexeme, token) in enumerate(self.token_stream):
             # Handling declarations
@@ -664,10 +649,7 @@ class CompilerUI(tk.Tk):
                     next_lexeme = next_token[1]
                     if next_lexeme in self.variables:
                         var_name = next_lexeme
-                        var_type = self.variables[var_name]["type"]
-
-                        # Get input value dynamically from user
-                        input_value = get_input_value(var_name, var_type)
+                        input_value = get_input_value(var_name)
                         self.variables[var_name]["value"] = input_value
                         print(f"Input received for {var_name}: {input_value}")
                     else:
@@ -698,7 +680,7 @@ class CompilerUI(tk.Tk):
 
             elif token == "NEWLN":  # Handle new line
                 self.console_area.insert(tk.END, "\n")
-            
+                
             elif token in {"IOL", "LOI"}:  # Handle special tokens
                 continue  # Just ignore these tokens for now
 
